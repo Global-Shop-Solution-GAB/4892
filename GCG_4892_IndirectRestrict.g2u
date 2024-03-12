@@ -1,0 +1,359 @@
+Program.Sub.ScreenSU.Start
+Gui.FNoIndirect..Create
+Gui.FNoIndirect..Caption("Indirect Jobs Restriction list")
+Gui.FNoIndirect..Size(8175,8880)
+Gui.FNoIndirect..MinX(0)
+Gui.FNoIndirect..MinY(0)
+Gui.FNoIndirect..Position(0,0)
+Gui.FNoIndirect..BackColor(-2147483633)
+Gui.FNoIndirect..MousePointer(0)
+Gui.FNoIndirect..Event(UnLoad,FNoIndirect_UnLoad)
+Gui.FNoIndirect.GsGCEmpList.Create(GsGridControl)
+Gui.FNoIndirect.GsGCEmpList.Size(7875,7770)
+Gui.FNoIndirect.GsGCEmpList.Position(45,45)
+Gui.FNoIndirect.GsGCEmpList.Event(CellValueChanged,GsGCEmpList_CellValueChanged)
+Gui.FNoIndirect.cmdSave.Create(Button)
+Gui.FNoIndirect.cmdSave.Size(1080,375)
+Gui.FNoIndirect.cmdSave.Position(45,7890)
+Gui.FNoIndirect.cmdSave.Caption("Save")
+Gui.FNoIndirect.cmdSave.Event(Click,cmdSave_Click)
+Gui.FNoIndirect.cmdSave.Enabled(False)
+Gui.FNoIndirect.txtEmpId.Create(TextBox,"",False,1425,300,0,1275,150,False,0,"Arial",8,-2147483643,1)
+Gui.FNoIndirect.cmdEmpBrow.Create(Button)
+Gui.FNoIndirect.cmdEmpBrow.Size(330,330)
+Gui.FNoIndirect.cmdEmpBrow.Position(2790,135)
+Gui.FNoIndirect.cmdEmpBrow.Caption("^")
+Gui.FNoIndirect.cmdEmpBrow.Event(Click,cmdEmpBrow_Click)
+Gui.FNoIndirect.cmdEmpBrow.Visible(False)
+Gui.FNoIndirect.cmdEmpBrow.Enabled(False)
+Gui.FNoIndirect.lbl1.Create(Label,"Employee ID",False,1110,255,0,135,240,False,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.iIndex.Declare
+v.Global.bEdit.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+f.Intrinsic.Control.Try
+f.ODBC.Connection!conx.OpenCompanyConnection
+
+f.Intrinsic.Control.If(V.Caller.Switches,=,"M")
+	f.Intrinsic.Control.CallSub(RefreshEmpList)
+	f.Intrinsic.Control.CallSub(LoadEmpList)
+f.Intrinsic.Control.Else
+	'check if its either the pre scan hook or the pre start job hook
+	f.Intrinsic.Control.If(v.Caller.Hook,=,15754,"OR",v.Caller.Hook,=,15934)
+		f.Intrinsic.Control.CallSub(IndirectYesNo)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.control.CallSub(FNoIndirect_UnLoad)
+	f.Intrinsic.Control.EndIf	
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.IndirectYesNo.Start
+v.Local.sEmp.Declare(String)
+v.Local.iRet1.Declare(long)
+v.Local.iRet2.Declare(long)
+v.Local.sJob.Declare(String)
+v.Local.sSuffix.Declare(String)
+v.Local.sSeq.Declare(String)
+v.Local.sSQL.Declare(String)
+
+f.Intrinsic.Control.Try
+
+
+v.Local.sJob.Set(v.Passed.009990)
+v.Local.sSuffix.Set(v.Passed.009991)
+v.Local.sSeq.Set(v.Passed.009992)
+v.Local.sEmp.Set(v.Passed.009993)
+'check if the job and suffix is setup for indirect labour accts by getting count
+f.Intrinsic.String.Build("Select Count(Job) from V_IND_LBR_ACCTS where JOB = '{0}' and Suffix = '{1}'",v.Local.sJob,v.Local.sSuffix,v.Local.sSQL)
+f.odbc.Connection!conx.executeandreturn(v.Local.sSQL,v.Local.iRet1)
+
+f.Intrinsic.Control.If(V.Local.iRet1,>,0)
+	' if job and suffix is an indirect account, check if employee is restricted
+	f.Intrinsic.String.Build("Select Count(employee) from GCG_4892_EMPLIST where employee = '{0}' and restricted = '1'",v.Local.sEMP,v.Local.sSQL)
+	f.odbc.Connection!conx.executeandreturn(v.Local.sSQL,v.Local.iRet2)
+	f.Intrinsic.Control.If(v.Local.iRet2,>,0)
+		'if restricted, stop processing	
+		v.Passed.777777.Set(1)
+		f.Intrinsic.UI.Msgbox("You are restricted from clocking onto an indirect sequence! Please contact your supervisor.")
+	f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.EndIf
+
+f.Intrinsic.control.CallSub(FNoIndirect_UnLoad)
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+
+Program.Sub.IndirectYesNo.End
+
+Program.Sub.FNoIndirect_UnLoad.Start
+f.ODBC.Connection!conx.Close
+f.Intrinsic.Control.End
+Program.Sub.FNoIndirect_UnLoad.End
+
+Program.Sub.cmdEmpBrow_Click.Start
+V.Local.sError.Declare(String)
+v.Local.sSql.Declare(String)
+v.local.sTitles.Declare(String)
+v.Local.iWidths.Declare(Long)
+v.Local.iOpt.Declare(Long)
+v.Local.sRet.Declare(String)
+f.Intrinsic.Control.Try
+'this functionality is not in use but was left in here in case they changed their mind.
+'create browser
+
+v.Local.sSql.Set("select Employee, Name, Dept_Employee as Department FROM employee_mstr where employee not in (select employee from GCG_4892_EMPLIST);")
+F.Intrinsic.String.Split("Employee*!*Name*!*Department","*!*",V.Local.sTitles)
+F.Intrinsic.String.Split("300*!*300*!*300","*!*",V.Local.iWidths)
+F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+f.Intrinsic.UI.Browser("Select Employee","CONX",V.Local.sSql,V.Local.sTitles,V.Local.iWidths,V.Local.sRet)
+
+'handle return
+F.Intrinsic.Control.If(V.Local.sRet,"=",v.Ambient.Cancel)
+	F.Intrinsic.UI.Msgbox("No Employee Selected")
+f.Intrinsic.Control.else
+	f.Intrinsic.String.Split(v.Local.sRet,"*!*",v.local.sRet)
+	gui.FNoIndirect.txtEmpId.Text(v.Local.sRet(0))
+	v.Local.sRet.Redim(0,0)
+f.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+Program.Sub.cmdEmpBrow_Click.End
+
+Program.Sub.cmdAdd_Click.Start
+v.Local.iRet.Declare
+v.Local.sSQL.Declare
+v.Local.sEMP.Declare
+v.Local.sHold.Declare
+v.Local.sEMPName.Declare
+v.Local.sDept.Declare
+gui.FNoIndirect..Enabled(False)
+v.Local.sEMP.Set(v.Screen.FNoIndirect!txtEmpId.text)
+
+'this functionality is not in use but was left in here in case they changed their mind.
+f.Intrinsic.Control.Try
+f.Intrinsic.String.Build("Select Count(employee) from v_employee_mstr where employee = '{0}'",v.Local.sEMP,v.Local.sSQL)
+f.odbc.Connection!conx.executeandreturn(v.Local.sSQL,v.Local.iRet)
+
+f.Intrinsic.Control.If(v.Local.iRet,=,0)
+	f.Intrinsic.UI.Msgbox("Invalid Employee ID entered.")
+	gui.FNoIndirect.txtEmpId.SetFocus
+	gui.FNoIndirect..Enabled(True)
+	f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.EndIf
+
+f.Intrinsic.String.Build("Select Count(employee) from GCG_4892_EMPLIST where employee = '{0}'",v.Local.sEMP,v.Local.sSQL)
+f.odbc.Connection!conx.executeandreturn(v.Local.sSQL,v.Local.iRet)
+
+f.Intrinsic.Control.If(v.Local.iRet,>,0)
+	f.Intrinsic.UI.Msgbox("Employee ID is already part of the list.")
+	gui.FNoIndirect.txtEmpId.SetFocus
+	gui.FNoIndirect..Enabled(True)
+	f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.EndIf
+
+
+
+f.Intrinsic.String.Build("Select name,Dept_employee from v_employee_mstr where employee = '{0}'",v.Local.sEMP,v.Local.sSQL)
+f.odbc.Connection!conx.executeandreturn(v.Local.sSQL,v.Local.sHold)
+
+f.Intrinsic.String.Split(v.Local.sHold,"*!*",v.Local.sHold)
+f.Intrinsic.Control.If(v.Local.sHold.UBound,=,1)
+	v.Local.sEMPName.Set(v.Local.sHold(0))
+	v.Local.sDept.Set(v.Local.sHold(1))
+f.Intrinsic.Control.Else
+	f.Intrinsic.UI.Msgbox("Oops! Something went wrong. Please try again.")
+	gui.FNoIndirect.txtEmpId.SetFocus
+	gui.FNoIndirect..Enabled(True)
+	f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.EndIf
+
+f.Intrinsic.String.Build("Insert into GCG_4892_EMPLIST values ('{0}')",v.Local.sEMP,v.Local.sSQL)
+f.odbc.Connection!conx.execute(v.Local.sSQL)
+
+f.Data.DataTable.AddRow("EMPDT","Employee",v.Local.sEMP,"Name",v.Local.sEMPName,"Dept_employee",v.Local.sDept)
+v.Local.sHold.Redim(0,0)
+gui.FNoIndirect..Enabled(True)
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+
+Program.Sub.cmdAdd_Click.End
+
+Program.Sub.RefreshEmpList.Start
+v.Local.sEmpListAct.declare(String)
+v.Local.sEmpListMaint.Declare(string)
+v.Local.sSql.declare(String)
+
+'update the custom table in case  employees are added or removed to the master table
+f.Intrinsic.Control.Try
+'get employee list in master
+f.odbc.Connection!Conx.ExecuteAndReturn("Select distinct Employee from V_Employee_mstr where date_termination = '1900-01-01'",v.Local.sEmpListAct)
+'format to use in the SQL "IN" statement
+f.Intrinsic.String.Replace(v.Local.sEmpListAct,"#$#","','",v.Local.sEmpListAct)
+f.Intrinsic.String.Build("'{0}'",v.Local.sEmpListAct,v.Local.sEmpListAct)
+'get employee list in Custom table
+f.odbc.Connection!conx.ExecuteAndReturn("Select distinct Employee from GCG_4892_EMPLIST",v.Local.sEmpListMaint)
+'format to use in the SQL "IN" statement
+f.Intrinsic.String.Replace(v.Local.sEmpListMaint,"#$#","','",v.Local.sEmpListMaint)
+f.Intrinsic.String.Build("'{0}'",v.Local.sEmpListMaint,v.Local.sEmpListMaint)
+
+'Check if there are any employee in master that are not in custom table
+f.Intrinsic.string.Build("Select distinct cast(0 as bit) as RESTRICTED,Employee from Employee_mstr where Employee not in ({0})",v.Local.sEmpListMaint,v.Local.sSql)
+f.Data.DataTable.CreateFromSQL("AddEmpDT","Conx",v.Local.sSql)
+
+'If they exist save to custom table
+f.Intrinsic.Control.If(v.DataTable.AddEmpDT.RowCount,>,0)
+	f.Data.DataTable.SaveToDB("AddEmpDT","conx","GCG_4892_EMPLIST","Employee",256,"")
+f.Intrinsic.Control.EndIf
+
+'delete from custonm when they are not in master table
+f.Intrinsic.string.Build("Delete from GCG_4892_EMPLIST where Employee not in ({0})",v.Local.sEmpListAct,v.Local.sSql)
+f.ODBC.Connection!conx.execute(v.Local.sSql)
+f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+
+Program.Sub.RefreshEmpList.End
+
+Program.Sub.LoadEmpList.Start
+v.Local.sSQL.Declare
+f.Intrinsic.Control.Try
+
+'get data and save to grid for maintenance screen
+f.Data.DataTable.CreateFromSQL("EmpDt","Conx","Select a.RESTRICTED,a.Employee as Employee,b.Name as Name,b.Dept_employee as Dept_employee from GCG_4892_EMPLIST  a inner join v_employee_mstr b on a.employee = b.employee",true)
+f.Data.DataView.Create("EmpDt","EmpVw",22)
+gui.FNoIndirect.GsGCEmpList.AddGridviewFromDataview("EmpGrid","EmpDt","EmpVw")
+
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","RESTRICTED","headerforecolor", v.Color.PRI-GSS-00)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","RESTRICTED","headerfontbold", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","RESTRICTED","caption","Restricted")
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","RESTRICTED","readonly", False)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","RESTRICTED","allowedit", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","RESTRICTED","MinWidth", 40)
+
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Employee","headerforecolor", v.Color.PRI-GSS-00)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Employee","headerfontbold", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Employee","caption","Employee ID")
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Employee","readonly", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Employee","allowedit", False)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Employee","MinWidth", 50)
+
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Name","headerforecolor", v.Color.PRI-GSS-00)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Name","headerfontbold", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Name","caption","Name")
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Name","readonly", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Name","allowedit", False)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Name","MinWidth", 75)
+
+
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Dept_employee","headerforecolor", v.Color.PRI-GSS-00)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Dept_employee","headerfontbold", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Dept_employee","caption","Department")
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Dept_employee","readonly", True)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Dept_employee","allowedit", False)
+gui.FNoIndirect.GsGCEmpList.SetColumnProperty("EmpGrid","Dept_employee","MinWidth", 75)
+
+gui.FNoIndirect.GsGCEmpList.SetGridviewProperty("EmpGrid","Enableappearanceoddrow",True)
+gui.FNoIndirect.GsGCEmpList.SetGridviewProperty("EmpGrid","OptionsFindAlwaysVisible",True)
+gui.FNoIndirect.GsGCEmpList.SetGridviewProperty("EmpGrid","Showgrouppanel",False)
+
+gui.FNoIndirect.GsGCEmpList.SetGridviewProperty("EmpGrid","OptionsViewShowAutoFilterRow",False)
+
+Gui.FNoIndirect..ContextMenuCreate("EmpGrid")
+Gui.FNoIndirect..ContextMenuAddItem("EmpGrid","Remove",0,"Remove")
+Gui.FNoIndirect..ContextMenuSetItemEventHandler("EmpGrid","Remove","ContextMenuItemSelection")
+
+
+gui.FNoIndirect.GsGCEmpList.MainView("EmpGrid")
+
+gui.FNoIndirect.GsGCEmpList.ResumeLayout
+gui.FNoIndirect..Show
+gui.FNoIndirect..Enabled(true)
+
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+Program.Sub.LoadEmpList.End
+
+Program.Sub.GsGCEmpList_RowCellClick.Start
+v.Local.sSQL.Declare
+V.Local.iX.Declare
+V.Local.iY.Declare
+'not in use
+
+F.Intrinsic.Control.If(v.Args.button,=,"Right")
+	F.Intrinsic.API.GetMousePosition(V.Local.iX,v.Local.iY)
+	Gui.FNoIndirect..ContextMenuShow("EmpGrid",V.Local.iX,V.Local.iY)
+	V.Global.iIndex.Set(V.Args.RowIndex)
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+Program.Sub.GsGCEmpList_RowCellClick.End
+
+Program.Sub.GsGCEmpList_CellValueChanged.Start
+'set edit flag if anything is changed and enable save button
+F.Intrinsic.Control.If(v.Args.Column,=,"RESTRICTED","AND",v.Global.bEdit,=,False)
+	V.Global.bEdit.Set(True)
+	gui.FNoIndirect.cmdSave.Enabled(True)
+F.Intrinsic.Control.EndIf
+
+Program.Sub.GsGCEmpList_CellValueChanged.End
+Program.Sub.ContextMenuItemSelection.Start
+v.Local.iRet.Declare
+v.Local.sEMP.Declare
+v.Local.sSQL.Declare
+f.Intrinsic.Control.Try
+'not in use
+F.Intrinsic.Control.If(V.Args.ItemName,=,"REMOVE")
+	gui.FNoIndirect..Enabled(False)
+	gui.FNoIndirect.GsGCEmpList.SuspendLayout
+'	f.Intrinsic.UI.Msgbox("Are you sure you want to remove this employee from the list? Doing so will grant him/her access to scan into an indirect sequence.","Delete Employee from List?",4,v.Local.iret)
+'	f.Intrinsic.Control.If(v.Local.iRet,=,7)
+'		gui.FNoIndirect.GsGCEmpList.ResumeLayout
+'		gui.FNoIndirect..Enabled(True)
+'		f.Intrinsic.Control.ExitSub
+'	f.Intrinsic.Control.EndIf
+	v.Local.sEMP.Set(v.DataTable.EMPDT(v.Global.iIndex).Employee!fieldVal)
+	f.Intrinsic.String.Build("Delete from GCG_4892_EMPLIST where employee = '{0}'",v.Local.sEMP,v.Local.sSQL)
+	f.ODBC.Connection!conx.execute(v.Local.sSQL)
+	f.Data.DataTable.DeleteRow("EmpDt",v.Global.iIndex)
+	f.Data.DataTable.AcceptChanges("EmpDt")
+	gui.FNoIndirect.GsGCEmpList.ResumeLayout
+	gui.FNoIndirect..Enabled(True)
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+
+Program.Sub.ContextMenuItemSelection.End
+
+Program.Sub.catching.Start
+v.Local.sError.declare(string)
+
+
+Function.Intrinsic.String.Concat(v.Ambient.Now,": Project: GCG_4892_IndirectRESTRICTED.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",v.Args.sub,V.Ambient.NewLine,"Error Occurred ",V.Args.errorno," with description ",V.args.errordesc,V.Local.sError)
+f.Intrinsic.UI.Msgbox(v.Local.sError)
+f.Intrinsic.Control.CallSub(FNoIndirect_UnLoad)
+Program.Sub.catching.End
+
+Program.Sub.cmdSave_Click.Start
+gui.FNoIndirect..Enabled(False)
+'save to DB if edit flag is true
+f.Intrinsic.Control.If(v.Global.bEdit)
+	f.Data.DataTable.SaveToDB("EMPDT","conx","GCG_4892_EMPLIST","EMPLOYEE",256,"EMPLOYEE@!@EMPLOYEE*!*RESTRICTED@!@RESTRICTED")
+	v.Global.bEdit.set(False)
+	gui.FNoIndirect.cmdSave.Enabled(False)
+f.Intrinsic.Control.EndIf
+gui.FNoIndirect..Enabled(True)
+Program.Sub.cmdSave_Click.End
